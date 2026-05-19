@@ -52,5 +52,6 @@
 #define TA_OS_TEST_CMD_ASAN_MALLOC          40
 #define TA_OS_TEST_CMD_ASAN_UAF             41
 #define TA_OS_TEST_CMD_ASAN_MEMFUNC         42
+#define TA_OS_TEST_CMD_VERAISON_ATTESTATION 43
 
 #endif /*TA_OS_TEST_H */

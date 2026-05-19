@@ -16,6 +16,7 @@
 #include <pta_attestation.h>
 #include <pta_invoke_tests.h>
 #include <pta_secstor_ta_mgmt.h>
+#include <pta_stats.h>
 #include <pthread.h>
 #ifdef CFG_SECURE_DATA_PATH
 #include <sdp_basic.h>
@@ -3475,3 +3476,94 @@ out:
 }
 ADBG_CASE_DEFINE(regression, 1042, xtest_tee_test_1042,
 		 "Test ASAN (Memory address sanitizer)");
+
+static TEEC_Result get_mempool_default_allocated(TEEC_Session *stats_sess,
+						 struct pta_stats_alloc *stats)
+{
+	TEEC_Operation op = TEEC_OPERATION_INITIALIZER;
+	uint32_t ret_orig = 0;
+
+	op.paramTypes = TEEC_PARAM_TYPES(TEEC_MEMREF_TEMP_OUTPUT,
+					 TEEC_NONE, TEEC_NONE, TEEC_NONE);
+	op.params[0].tmpref.buffer = stats;
+	op.params[0].tmpref.size = sizeof(*stats);
+
+	return TEEC_InvokeCommand(stats_sess,
+				  STATS_CMD_MEMPOOL_DEFAULT_ALLOC_STATS,
+				  &op, &ret_orig);
+}
+
+static void xtest_tee_test_1043(ADBG_Case_t *c)
+{
+	TEEC_UUID stats_uuid = STATS_UUID;
+	TEEC_Operation op = TEEC_OPERATION_INITIALIZER;
+	TEEC_Result res = TEEC_ERROR_GENERIC;
+	TEEC_Session ta_sess = { };
+	TEEC_Session stats_sess = { };
+	struct pta_stats_alloc before = { };
+	struct pta_stats_alloc after = { };
+	uint32_t ret_orig = 0;
+	uint32_t i = 0;
+	const uint32_t iterations = 10;
+
+	res = xtest_teec_open_session(&ta_sess, &os_test_ta_uuid, NULL,
+				      &ret_orig);
+	if (!ADBG_EXPECT_TEEC_SUCCESS(c, res))
+		return;
+
+	res = xtest_teec_open_session(&stats_sess, &stats_uuid, NULL,
+				      &ret_orig);
+	if (!ADBG_EXPECT_TEEC_SUCCESS(c, res))
+		goto close_ta;
+
+	/*
+	 * Probe the stats facility once. A pre-patched core returns
+	 * BAD_PARAMETERS for the new command; in that case we skip rather
+	 * than spuriously fail.
+	 */
+	res = get_mempool_default_allocated(&stats_sess, &before);
+	if (res == TEEC_ERROR_BAD_PARAMETERS) {
+		Do_ADBG_Log("  skip test, mempool_default stats not exposed by core "
+			    "(needs the matching optee_os patch)");
+		goto close_stats;
+	}
+	if (!ADBG_EXPECT_TEEC_SUCCESS(c, res))
+		goto close_stats;
+
+	op.paramTypes = TEEC_PARAM_TYPES(TEEC_NONE, TEEC_NONE,
+					 TEEC_NONE, TEEC_NONE);
+
+	for (i = 0; i < iterations; i++) {
+		res = get_mempool_default_allocated(&stats_sess, &before);
+		if (!ADBG_EXPECT_TEEC_SUCCESS(c, res))
+			goto close_stats;
+
+		res = TEEC_InvokeCommand(&ta_sess,
+					 TA_OS_TEST_CMD_VERAISON_ATTESTATION,
+					 &op, &ret_orig);
+		if (i == 0 && res == TEEC_ERROR_ITEM_NOT_FOUND) {
+			Do_ADBG_Log("  skip test, Veraison attestation PTA not found "
+				    "(build core with CFG_VERAISON_ATTESTATION_PTA=y)");
+			goto close_stats;
+		}
+		if (!ADBG_EXPECT_TEEC_SUCCESS(c, res))
+			break;
+
+		res = get_mempool_default_allocated(&stats_sess, &after);
+		if (!ADBG_EXPECT_TEEC_SUCCESS(c, res))
+			goto close_stats;
+
+		Do_ADBG_Log("Iteration %u (mempool delta = %u bytes)",
+			    i, after.allocated - before.allocated);
+		if (!ADBG_EXPECT_COMPARE_UNSIGNED(c, after.allocated, ==,
+						  before.allocated))
+			break;
+	}
+
+close_stats:
+	TEEC_CloseSession(&stats_sess);
+close_ta:
+	TEEC_CloseSession(&ta_sess);
+}
+ADBG_CASE_DEFINE(regression, 1043, xtest_tee_test_1043,
+		 "Veraison attestation PTA mempool leak (delta-based)");

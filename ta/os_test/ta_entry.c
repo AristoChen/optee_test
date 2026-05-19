@@ -180,6 +180,8 @@ TEE_Result TA_InvokeCommandEntryPoint(void *pSessionContext,
 
 	case TA_OS_TEST_CMD_ATTESTATION:
 		return ta_entry_attestation(nParamTypes, pParams);
+	case TA_OS_TEST_CMD_VERAISON_ATTESTATION:
+		return ta_entry_veraison_attestation(nParamTypes, pParams);
 	case TA_OS_TEST_CMD_ASAN_STACK:
 		return ta_entry_asan_stack();
 	case TA_OS_TEST_CMD_ASAN_GLOBAL:

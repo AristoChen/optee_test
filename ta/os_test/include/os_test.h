@@ -42,6 +42,8 @@ TEE_Result ta_entry_cxx_exc_mixed(void);
 TEE_Result ta_entry_pauth_test_nop(void);
 TEE_Result ta_entry_pauth_corrupt_pac(void);
 TEE_Result ta_entry_attestation(uint32_t param_types, TEE_Param params[4]);
+TEE_Result ta_entry_veraison_attestation(uint32_t param_types,
+					TEE_Param params[4]);
 TEE_Result ta_entry_memtag_use_after_free(void);
 TEE_Result ta_entry_memtag_invalid_tag(void);
 TEE_Result ta_entry_memtag_double_free(void);
